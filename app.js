@@ -485,7 +485,17 @@ function returnProduct(id) {
   if (!confirm(`Mark "${a.productName}" as returned?`)) return;
   const prod = db.products.find(p => p.id === a.productId);
   if (prod) prod.status = 'Available';
-  db.history.push({ id: db.nextId.history++, productCode: a.productCode, productName: a.productName, action: 'Returned', employee: a.employeeName, date: today(), notes: 'Product returned' });
+  const returnedOn = today();
+  db.history.push({
+    id: db.nextId.history++,
+    productCode: a.productCode,
+    productName: a.productName,
+    action: 'Returned',
+    employee: a.employeeName,
+    date: returnedOn,
+    returnDate: returnedOn,
+    notes: 'Product returned'
+  });
   db.assignments = db.assignments.filter(x => x.id !== id);
   showToast('Product returned to inventory.', 'success');
   renderAssigned(); updateBadges();
@@ -687,6 +697,7 @@ function renderHistory(query = '') {
       <td><span style="color:${actionColor[h.action]||'var(--text-secondary)'};font-weight:600;font-size:12px;">${h.action}</span></td>
       <td>${h.employee}</td>
       <td>${formatDate(h.date)}</td>
+      <td>${formatDate(h.returnDate)}</td>
       <td style="color:var(--text-secondary)">${h.notes}</td>
     </tr>`
   ).join('');
