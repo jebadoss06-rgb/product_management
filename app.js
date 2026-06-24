@@ -148,17 +148,7 @@ function getFilteredEmployees() {
     const matchesQuery = !query || [e.code, e.name, e.dept, e.role, e.email, e.blood]
       .some(value => value && value.toLowerCase().includes(query));
     const matchesStatus = !tableState.employeeStatus || e.status === tableState.employeeStatus;
-    let matchesDate = true;
-    if (tableState.employeeJoinFrom || tableState.employeeJoinTo) {
-      const joinDate = e.joinDate ? new Date(e.joinDate) : null;
-      if (joinDate) {
-        if (tableState.employeeJoinFrom && joinDate < new Date(tableState.employeeJoinFrom)) matchesDate = false;
-        if (tableState.employeeJoinTo && joinDate > new Date(tableState.employeeJoinTo)) matchesDate = false;
-      } else {
-        matchesDate = false;
-      }
-    }
-    return matchesQuery && matchesStatus && matchesDate;
+    return matchesQuery && matchesStatus;
   }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
@@ -211,22 +201,7 @@ function clearCatSearch() {
   renderCategories(1);
 }
 
-// Employee date filter
-function filterEmployeesByDate() {
-  tableState.employeeJoinFrom = document.getElementById('emp-join-from').value;
-  tableState.employeeJoinTo = document.getElementById('emp-join-to').value;
-  renderEmployees(1);
-}
-
-function clearEmployeeDateFilter() {
-  const fromEl = document.getElementById('emp-join-from');
-  const toEl = document.getElementById('emp-join-to');
-  if (fromEl) fromEl.value = '';
-  if (toEl) toEl.value = '';
-  tableState.employeeJoinFrom = '';
-  tableState.employeeJoinTo = '';
-  renderEmployees(1);
-}
+// Employee date filter removed
 
 // Assignment search by product name/code/employee/dept
 function searchAssignments(q) {
@@ -331,8 +306,18 @@ function navigate(page) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
   const pageEl = document.getElementById(`page-${page}`);
   if (pageEl) pageEl.classList.add('active');
-  const titles = { dashboard: 'Dashboard', employees: 'Employees', categories: 'Categories', products: 'Products', items: 'Category Items', assigned: 'Assigned Products', available: 'Available Products', damaged: 'Damage Reports', repair: 'Repair Tracking', history: 'Product History' };
+  const titles = { dashboard: 'Dashboard', employees: 'Employees', categories: 'Categories', products: 'Products', items: 'Accessories', assigned: 'Assigned Products', available: 'Available Products', damaged: 'Damage Reports', repair: 'Repair Tracking', history: 'Product History' };
   document.getElementById('page-title').textContent = titles[page] || page;
+
+  // Toggle Categories search box in topbar
+  const topbarCatSearch = document.getElementById('topbar-cat-search-wrapper');
+  if (topbarCatSearch) {
+    if (page === 'categories') {
+      topbarCatSearch.style.display = 'block';
+    } else {
+      topbarCatSearch.style.display = 'none';
+    }
+  }
 
   // Clear global search input value and tableState queries when navigating
   tableState.employeeQuery = '';
@@ -387,9 +372,8 @@ document.querySelectorAll('.nav-item').forEach(el => {
 function renderPage(page) {
   if (page === 'dashboard') renderDashboard();
   if (page === 'employees') renderEmployees();
-  if (page === 'categories') renderCategories();
+  if (page === 'categories') { renderItemsPage(); renderCategories(); }
   if (page === 'products') renderProducts();
-  if (page === 'items') renderItemsPage();
   if (page === 'assigned') renderAssigned();
   if (page === 'available') renderAvailable();
   if (page === 'damaged') renderDamaged();
@@ -617,6 +601,124 @@ function deleteEmployee(id) {
 // ===================== CATEGORIES =====================
 let selectedCategoryTags = [];
 
+let openedCatFromProduct = false;
+
+function renderCategories(page = tableState.categories) {
+  tableState.categories = page;
+  const tbody = document.getElementById('cat-table');
+  const query = (tableState.categoryQuery || '').trim().toLowerCase();
+  let filteredCategories = [...db.categories];
+  if (query) {
+    filteredCategories = filteredCategories.filter(c => {
+      const catName = typeof c === 'string' ? c : c.name;
+      return catName.toLowerCase().includes(query);
+    });
+  }
+  const total = filteredCategories.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * PAGE_SIZE;
+  const sortedCategories = filteredCategories.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const pageItems = sortedCategories.slice(start, start + PAGE_SIZE);
+
+  if (!total) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>No categories found.</p></div></td></tr>';
+    updateTableInfo('cat-table-info', 0, 0, 0);
+    renderPagination('cat', total, page);
+    return;
+  }
+
+  tbody.innerHTML = pageItems.map((cat, i) => {
+    const index = start + i;
+    const catName = typeof cat === 'string' ? cat : cat.name;
+    const catItems = (cat && cat.items) ? cat.items : [];
+    const count = db.products.filter(p => p.cat === catName).length;
+    return `<tr>
+      <td>${index + 1}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${COLORS[index % COLORS.length]};display:inline-block"></span>${catName}</span></td>
+      <td>
+        <div><strong>${count}</strong> products</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+          ${catItems.length ? `Related: ${catItems.join(', ')}` : 'No related items'}
+        </div>
+      </td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <button class="btn-icon edit" title="Edit" onclick="editCategory('${catName.replace(/'/g, "\\'")}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-icon del" title="Delete" onclick="deleteCategory('${catName.replace(/'/g, "\\'")}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  updateTableInfo('cat-table-info', start + 1, Math.min(start + pageItems.length, total), total);
+  renderPagination('cat', total, page);
+}
+
+function editCategory(catName) {
+  openedCatFromProduct = false;
+  editingId.cat = catName;
+  document.getElementById('cat-modal-title').textContent = 'Edit Category';
+  const cat = db.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
+  if (!cat) return;
+  const nameVal = typeof cat === 'string' ? cat : cat.name;
+  const catItems = typeof cat === 'string' ? [] : (cat.items || []);
+  document.getElementById('cf-name').value = nameVal;
+  selectedCategoryTags = [...catItems];
+  renderCategoryTags();
+  openModal('cat-modal');
+}
+
+function saveCategory() {
+  const name = document.getElementById('cf-name').value.trim();
+  if (!name) { showToast('Category name required.', 'error'); return; }
+
+  const catObj = {
+    name: name,
+    items: [...selectedCategoryTags],
+    updatedAt: Date.now()
+  };
+
+  if (editingId.cat !== null) {
+    const idx = db.categories.findIndex(c => (typeof c === 'string' ? c : c.name) === editingId.cat);
+    if (idx !== -1) {
+      db.categories[idx] = catObj;
+    }
+    showToast('Category updated.', 'success');
+  } else {
+    const exists = db.categories.some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
+    if (exists) { showToast('Category already exists.', 'error'); return; }
+    db.categories.push(catObj);
+    showToast('Category added.', 'success');
+  }
+  closeModal('cat-modal');
+  editingId.cat = null;
+  selectedCategoryTags = [];
+  document.getElementById('cat-modal-title').textContent = 'Add Category';
+  document.getElementById('cf-name').value = '';
+  renderCategories();
+  populateCategorySelects();
+
+  if (openedCatFromProduct) {
+    const pfCat = document.getElementById('pf-cat');
+    if (pfCat) {
+      pfCat.value = name;
+    }
+    openedCatFromProduct = false;
+  }
+}
+
+function deleteCategory(catName) {
+  if (!confirm('Delete this category?')) return;
+  db.categories = db.categories.filter(c => (typeof c === 'string' ? c : c.name) !== catName);
+  showToast('Category deleted.', 'success');
+  renderCategories(); populateCategorySelects();
+}
+
 function renderCategoryTags() {
   const list = document.getElementById('cf-tags-list');
   if (!list) return;
@@ -698,260 +800,7 @@ function addCategorySuggestion(item) {
   }
 }
 
-let openedCatFromProduct = false;
-function openCategoryModalFromProduct() {
-  openedCatFromProduct = true;
-  openCategoryModal();
-}
 
-function openCategoryModal() {
-  if (!openedCatFromProduct) {
-    openedCatFromProduct = false;
-  }
-  editingId.cat = null;
-  document.getElementById('cat-modal-title').textContent = 'Add Category';
-  document.getElementById('cf-name').value = '';
-  const tagInput = document.getElementById('cf-tag-input');
-  if (tagInput) tagInput.value = '';
-  selectedCategoryTags = [];
-  renderCategoryTags();
-  openModal('cat-modal');
-}
-
-// Bind Category Add button
-const catOpenBtn = document.querySelector('[onclick="openModal(\'cat-modal\')"]');
-if (catOpenBtn) {
-  catOpenBtn.onclick = openCategoryModal;
-}
-
-// Inline Category Form Functions
-let selectedInlineCategoryTags = [];
-
-function toggleInlineCategory(show) {
-  const container = document.getElementById('inline-cat-container');
-  if (!container) return;
-  if (show) {
-    container.style.display = 'block';
-    document.getElementById('inline-cf-name').value = '';
-    const tagInput = document.getElementById('inline-cf-tag-input');
-    if (tagInput) tagInput.value = '';
-    selectedInlineCategoryTags = [];
-    renderInlineCategoryTags();
-    document.getElementById('inline-cf-name').focus();
-  } else {
-    container.style.display = 'none';
-  }
-}
-
-function renderInlineCategoryTags() {
-  const list = document.getElementById('inline-cf-tags-list');
-  if (!list) return;
-
-  list.innerHTML = selectedInlineCategoryTags.map(tag => `
-    <span class="tag-badge">
-      ${tag}
-      <span class="tag-remove" onclick="removeInlineCategoryTag('${tag.replace(/'/g, "\\'")}')">&times;</span>
-    </span>
-  `).join('');
-
-  updateInlineCategorySuggestions();
-}
-
-function handleInlineCategoryTagKeypress(e) {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    addInlineCategoryCustomTag();
-  }
-}
-
-function addInlineCategoryCustomTag() {
-  const input = document.getElementById('inline-cf-tag-input');
-  if (!input) return;
-  const value = input.value.trim();
-  if (value) {
-    if (!selectedInlineCategoryTags.includes(value)) {
-      selectedInlineCategoryTags.push(value);
-      input.value = '';
-      renderInlineCategoryTags();
-    } else {
-      showToast('Item already added.', 'error');
-    }
-  }
-}
-
-function removeInlineCategoryTag(tag) {
-  selectedInlineCategoryTags = selectedInlineCategoryTags.filter(t => t !== tag);
-  renderInlineCategoryTags();
-}
-
-function updateInlineCategorySuggestions() {
-  const nameInput = document.getElementById('inline-cf-name');
-  const wrapper = document.getElementById('inline-cf-suggestions-wrapper');
-  const list = document.getElementById('inline-cf-suggestions-list');
-  if (!nameInput || !wrapper || !list) return;
-
-  const typedName = nameInput.value.trim().toLowerCase();
-  let suggestions = [];
-
-  if (typedName.includes('computer') || typedName.includes('pc')) {
-    suggestions = ['CPU', 'Mouse', 'Monitor', 'Keyboard', 'Mic'];
-  } else if (typedName.includes('laptop')) {
-    suggestions = ['Mouse', 'Mic', 'Charger', 'Bag'];
-  } else if (typedName.includes('chair')) {
-    suggestions = ['Normal Chair', 'Roll Chair', 'Executive Chair'];
-  }
-
-  // Filter out suggestions that are already selected
-  const availableSuggestions = suggestions.filter(item => !selectedInlineCategoryTags.includes(item));
-
-  if (availableSuggestions.length > 0) {
-    wrapper.style.display = 'block';
-    list.innerHTML = availableSuggestions.map(item => `
-      <span class="suggestion-tag" style="background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:4px 10px; font-size:11px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; color:var(--text-primary); font-weight:500; transition:all .15s;" onclick="addInlineCategorySuggestion('${item.replace(/'/g, "\\'")}')" onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)';" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-primary)';">
-        + ${item}
-      </span>
-    `).join('');
-  } else {
-    wrapper.style.display = 'none';
-    list.innerHTML = '';
-  }
-}
-
-function addInlineCategorySuggestion(item) {
-  if (!selectedInlineCategoryTags.includes(item)) {
-    selectedInlineCategoryTags.push(item);
-    renderInlineCategoryTags();
-  }
-}
-
-function saveInlineCategory() {
-  const name = document.getElementById('inline-cf-name').value.trim();
-  if (!name) { showToast('Category name required.', 'error'); return; }
-
-  const exists = db.categories.some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
-  if (exists) { showToast('Category already exists.', 'error'); return; }
-
-  const catObj = {
-    name: name,
-    items: [...selectedInlineCategoryTags]
-  };
-
-  db.categories.push(catObj);
-  showToast('Category added.', 'success');
-
-  toggleInlineCategory(false);
-  selectedInlineCategoryTags = [];
-  
-  populateCategorySelects();
-  
-  // Auto-select the newly added category in the product select dropdown
-  const pfCat = document.getElementById('pf-cat');
-  if (pfCat) {
-    pfCat.value = name;
-  }
-
-  // Refresh categories view if open
-  renderCategories();
-}
-
-function renderCategories(page = tableState.categories) {
-  tableState.categories = page;
-  const tbody = document.getElementById('cat-table');
-  const query = (tableState.categoryQuery || '').trim().toLowerCase();
-  let filteredCategories = [...db.categories];
-  if (query) {
-    filteredCategories = filteredCategories.filter(c => {
-      const catName = typeof c === 'string' ? c : c.name;
-      return catName.toLowerCase().includes(query);
-    });
-  }
-  const total = filteredCategories.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (page > totalPages) page = totalPages;
-  const start = (page - 1) * PAGE_SIZE;
-  const sortedCategories = filteredCategories.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const pageItems = sortedCategories.slice(start, start + PAGE_SIZE);
-
-  if (!total) {
-    tbody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><p>No categories found.</p></div></td></tr>';
-    updateTableInfo('cat-table-info', 0, 0, 0);
-    renderPagination('cat', total, page);
-    return;
-  }
-
-  tbody.innerHTML = pageItems.map((cat, i) => {
-    const index = start + i;
-    const catName = typeof cat === 'string' ? cat : cat.name;
-    const catItems = (cat && cat.items) ? cat.items : [];
-    const count = db.products.filter(p => p.cat === catName).length;
-    return `<tr>
-      <td>${index + 1}</td>
-      <td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${COLORS[index % COLORS.length]};display:inline-block"></span>${catName}</span></td>
-      <td>
-        <div><strong>${count}</strong> products</div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
-          ${catItems.length ? `Related: ${catItems.join(', ')}` : 'No related items'}
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-
-  updateTableInfo('cat-table-info', start + 1, Math.min(start + pageItems.length, total), total);
-  renderPagination('cat', total, page);
-}
-
-function editCategory(catName) {
-  openedCatFromProduct = false;
-  editingId.cat = catName;
-  document.getElementById('cat-modal-title').textContent = 'Edit Category';
-  const cat = db.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
-  if (!cat) return;
-  const nameVal = typeof cat === 'string' ? cat : cat.name;
-  const catItems = typeof cat === 'string' ? [] : (cat.items || []);
-  document.getElementById('cf-name').value = nameVal;
-  selectedCategoryTags = [...catItems];
-  renderCategoryTags();
-  openModal('cat-modal');
-}
-
-function saveCategory() {
-  const name = document.getElementById('cf-name').value.trim();
-  if (!name) { showToast('Category name required.', 'error'); return; }
-
-  const catObj = {
-    name: name,
-    items: [...selectedCategoryTags],
-    updatedAt: Date.now()
-  };
-
-  if (editingId.cat !== null) {
-    const idx = db.categories.findIndex(c => (typeof c === 'string' ? c : c.name) === editingId.cat);
-    if (idx !== -1) {
-      db.categories[idx] = catObj;
-    }
-    showToast('Category updated.', 'success');
-  } else {
-    const exists = db.categories.some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
-    if (exists) { showToast('Category already exists.', 'error'); return; }
-    db.categories.push(catObj);
-    showToast('Category added.', 'success');
-  }
-  closeModal('cat-modal');
-  editingId.cat = null;
-  selectedCategoryTags = [];
-  document.getElementById('cat-modal-title').textContent = 'Add Category';
-  document.getElementById('cf-name').value = '';
-  renderCategories();
-  populateCategorySelects();
-
-  if (openedCatFromProduct) {
-    const pfCat = document.getElementById('pf-cat');
-    if (pfCat) {
-      pfCat.value = name;
-    }
-    openedCatFromProduct = false;
-  }
-}
 
 // Ensure populateCategorySelects maps correct category names
 function populateCategorySelects() {
@@ -976,11 +825,47 @@ function populateCategorySelects() {
   }
 }
 
-function deleteCategory(catName) {
-  if (!confirm('Delete this category?')) return;
-  db.categories = db.categories.filter(c => (typeof c === 'string' ? c : c.name) !== catName);
-  showToast('Category deleted.', 'success');
-  renderCategories(); populateCategorySelects();
+
+
+function addCategoryFromAccessories() {
+  const input = document.getElementById('new-category-name');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) {
+    showToast('Please enter a category name.', 'error');
+    return;
+  }
+
+  // Case-insensitive check to avoid duplicates
+  const exists = db.categories.some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
+  if (exists) {
+    showToast('Category already exists.', 'error');
+    return;
+  }
+
+  const catObj = {
+    name: name,
+    items: [],
+    updatedAt: Date.now()
+  };
+
+  db.categories.push(catObj);
+  showToast(`Category "${name}" added.`, 'success');
+  input.value = '';
+
+  // Refresh category tables and dropdown select options
+  renderCategories();
+  populateCategorySelects();
+  
+  // Refresh Accessories page category list
+  renderItemsPage();
+  
+  // Select the newly added category (which is at the end of the array)
+  const select = document.getElementById('item-cat-select');
+  if (select) {
+    select.value = db.categories.length - 1;
+    onItemCategoryChange();
+  }
 }
 
 // ===================== CATEGORY ITEMS (ITEMS PAGE) =====================
@@ -1120,7 +1005,7 @@ function renderProducts(page = tableState.products) {
 
   tbody.innerHTML = pageItems.map(p =>
     `<tr>
-      <td>${p.cat}${p.subCat ? ` (${p.subCat})` : ''}</td>
+      <td>${p.cat}</td>
       <td><strong>${p.name}</strong></td>
       <td><code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px;">${p.code}</code></td>
       <td>${p.brand}</td>
@@ -1188,23 +1073,7 @@ function addProductTag(value) {
   }
 }
 
-function addCustomProductTag() {
-  const input = document.getElementById('pf-custom-item');
-  if (!input) return;
-  const value = input.value.trim();
-  if (!value) {
-    showToast('Please enter an item name.', 'error');
-    return;
-  }
-  if (!selectedProductTags.includes(value)) {
-    selectedProductTags.push(value);
-    input.value = '';
-    renderProductTags();
-    populateProductTagsSelect();
-  } else {
-    showToast('Item already added.', 'error');
-  }
-}
+
 
 function removeProductTag(value) {
   selectedProductTags = selectedProductTags.filter(item => item !== value);
@@ -1248,15 +1117,8 @@ function populateProductTagsSelect() {
 
 function onProductCategoryChange() {
   const cat = document.getElementById('pf-cat').value;
-  const container = document.getElementById('product-dynamic-fields-container');
   const pfQty = document.getElementById('pf-qty');
   const pfCode = document.getElementById('pf-code');
-  if (!container) return;
-
-  selectedProductTags = [];
-
-  container.innerHTML = '';
-  container.style.display = 'none';
 
   // Restore defaults
   if (pfCode) {
@@ -1270,37 +1132,9 @@ function onProductCategoryChange() {
   }
 
   if (cat) {
-    container.innerHTML = `
-      <div class="form-group" style="margin-bottom:0; display:flex; flex-direction:column; gap:10px;">
-        <label style="font-weight: 600; color: var(--text-primary);">Related Items / Accessories *</label>
-        <div id="pf-tags-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-        
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <!-- Pre-configured Items Select Dropdown -->
-          <select id="pf-select-item" onchange="addProductTag(this.value)" style="flex:1; min-width:180px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--text-primary); font-size:13px;">
-          </select>
-          
-          <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">or</span>
-          
-          <!-- Custom item manual text input -->
-          <div style="display:flex; flex:1.2; min-width:200px; gap:6px;">
-            <input type="text" id="pf-custom-item" placeholder="Type custom accessory..." style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--white); color:var(--text-primary); font-size:13px;" onkeypress="if(event.key==='Enter'){ event.preventDefault(); addCustomProductTag(); }">
-            <button type="button" class="btn btn-secondary" onclick="addCustomProductTag()" style="padding:0 12px; height:38px; border-radius:8px; font-size:13px; font-weight:600;">Add</button>
-          </div>
-        </div>
-      </div>
-    `;
-    container.style.display = 'block';
-    populateProductTagsSelect();
-    renderProductTags();
-
-    // Auto-fill quantity = count of related items in category (Chair is manual)
-    if (cat !== 'Chair' && editingId.prod === null) {
-      const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name) === cat);
-      const itemCount = (catObj && catObj.items) ? catObj.items.length : 0;
-      if (pfQty) {
-        pfQty.value = itemCount > 0 ? itemCount : '';
-      }
+    // Auto-fill quantity = 1 by default (user can edit it)
+    if (pfQty && editingId.prod === null) {
+      pfQty.value = 1;
     }
 
     // Auto-assign code and make readOnly for Chair
@@ -1330,23 +1164,7 @@ function editProduct(id) {
   document.getElementById('pf-name').value = p.name || '';
   document.getElementById('pf-cat').value = p.cat || '';
   
-  // Reset PC parts
-  selectedPCParts = [];
-
-  // Render and populate subcategory
   onProductCategoryChange();
-  if (p.cat === 'PC') {
-    if (p.subCat) {
-      selectedPCParts = p.subCat.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    renderPCPartTags();
-  } else if (p.cat === 'Laptop') {
-    const subcatEl = document.getElementById('pf-subcat-custom');
-    if (subcatEl) subcatEl.value = p.subCat || '';
-  } else if (p.cat === 'Chair') {
-    const subcatEl = document.getElementById('pf-subcat-chair');
-    if (subcatEl) subcatEl.value = p.subCat || '';
-  }
 
   document.getElementById('pf-brand').value = p.brand || '';
   document.getElementById('pf-date').value = p.purchaseDate || '';
@@ -1371,16 +1189,6 @@ function openProductModal() {
   document.getElementById('pf-qty').value = '';
   document.getElementById('pf-status').value = '';
 
-  // Clear and hide dynamic fields wrapper container
-  const container = document.getElementById('product-dynamic-fields-container');
-  if (container) {
-    container.innerHTML = '';
-    container.style.display = 'none';
-  }
-
-  // Reset selected product tags
-  selectedProductTags = [];
-
   openModal('prod-modal');
 }
 
@@ -1393,44 +1201,6 @@ function saveProduct() {
   
   const cat = document.getElementById('pf-cat').value;
   let subCat = '';
-
-  if (cat === 'PC') {
-    if (selectedPCParts.length === 0) {
-      showToast('Please select at least one related item for PC.', 'error');
-      return;
-    }
-    subCat = selectedPCParts.join(', ');
-  } else if (cat === 'Laptop') {
-    const el = document.getElementById('pf-subcat-custom');
-    if (el) {
-      subCat = el.value.trim();
-      if (!subCat) {
-        showToast('Please enter a related item name.', 'error');
-        return;
-      }
-      
-      // Auto-add Laptop items to db.categories so it's assignable
-      const laptopCat = db.categories.find(c => c.name === 'Laptop');
-      if (laptopCat) {
-        if (!laptopCat.items) laptopCat.items = [];
-        // Add if not already present (case-insensitive check)
-        const exists = laptopCat.items.some(item => item.toLowerCase() === subCat.toLowerCase());
-        if (!exists) {
-          laptopCat.items.push(subCat);
-          laptopCat.updatedAt = Date.now();
-        }
-      }
-    }
-  } else if (cat === 'Chair') {
-    const el = document.getElementById('pf-subcat-chair');
-    if (el) {
-      subCat = el.value;
-      if (!subCat) {
-        showToast('Please select a chair type.', 'error');
-        return;
-      }
-    }
-  }
 
   const prod = {
     id: editingId.prod || db.nextId.prod++,
@@ -1534,7 +1304,10 @@ function addAssignItemTag(value) {
 
 function removeAssignItemTag(item) {
   const category = document.getElementById('af-cat').value;
-  if (item === category) {
+  const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
+  const relatedItems = (catObj && catObj.items && Array.isArray(catObj.items)) ? catObj.items : [];
+  const isMainCategory = item === category && relatedItems.length === 0;
+  if (isMainCategory) {
     showToast('Cannot remove the main category item.', 'error');
     return;
   }
@@ -1580,14 +1353,7 @@ function suggestAssignProducts(query, source) {
 
   // Resolve allowed categories/items
   const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
-  const items = [category];
-  if (catObj && catObj.items && Array.isArray(catObj.items)) {
-    catObj.items.forEach(item => {
-      if (!items.includes(item)) {
-        items.push(item);
-      }
-    });
-  }
+  const items = (catObj && catObj.items && catObj.items.length > 0) ? catObj.items : [category];
 
   // Filter available products
   const products = db.products.filter(p => {
@@ -1665,21 +1431,17 @@ function selectAssignProductSuggestion(pId) {
     codeSuggestions.style.display = 'none';
   }
 
-  // Determine if activeAssignItem is set, otherwise resolve it from the product's category
+  // Determine if activeAssignItem is set, otherwise resolve it from the product's category/subcategory
   let itemToAssign = activeAssignItem;
   if (!itemToAssign) {
     const category = document.getElementById('af-cat').value;
     const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
-    const items = [category];
-    if (catObj && catObj.items && Array.isArray(catObj.items)) {
-      catObj.items.forEach(item => {
-        if (!items.includes(item)) {
-          items.push(item);
-        }
-      });
-    }
+    const items = (catObj && catObj.items && catObj.items.length > 0) ? catObj.items : [category];
 
-    const matchingItem = items.find(itm => itm.toLowerCase() === p.cat.toLowerCase());
+    const matchingItem = items.find(itm => 
+      itm.toLowerCase() === p.cat.toLowerCase() ||
+      (p.subCat && p.subCat.toLowerCase().split(',').map(s => s.trim()).includes(itm.toLowerCase()))
+    );
     if (matchingItem) {
       itemToAssign = matchingItem;
       if (!selectedAssignItems.includes(itemToAssign)) {
@@ -1721,7 +1483,9 @@ function renderAssignItemTags() {
     const borderColor = isActive ? 'var(--accent)' : 'rgba(59, 130, 246, 0.2)';
     const removeColor = isActive ? 'white' : 'var(--text-secondary)';
 
-    const isMainCategory = item === category;
+    const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
+    const relatedItems = (catObj && catObj.items && Array.isArray(catObj.items)) ? catObj.items : [];
+    const isMainCategory = item === category && relatedItems.length === 0;
     const removeButton = isMainCategory ? '' : `<span class="tag-remove" style="color:${removeColor}; font-weight:bold; font-size:12px; cursor:pointer;" onclick="event.stopPropagation(); removeAssignItemTag('${item.replace(/'/g, "\\'")}')">&times;</span>`;
 
     return `
@@ -1732,7 +1496,7 @@ function renderAssignItemTags() {
     `;
   }).join('');
 
-  // Update Item Select Dropdown to exclude already selected items and main category
+  // Update Item Select Dropdown to exclude already selected items
   if (category && itemSelect) {
     const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
     const items = (catObj && catObj.items && Array.isArray(catObj.items)) ? catObj.items : [];
@@ -1768,25 +1532,45 @@ function onAssignCategoryChange() {
 
   const category = document.getElementById('af-cat').value;
   const itemSelect = document.getElementById('af-item-select');
+  const unitsInput = document.getElementById('af-units');
   if (!itemSelect) return;
 
   if (!category) {
     itemSelect.innerHTML = '<option value="">Select Category first</option>';
     itemSelect.value = '';
+    if (unitsInput) {
+      unitsInput.readOnly = true;
+    }
     renderAssignItemTags();
     return;
   }
 
   const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name).toLowerCase() === category.toLowerCase());
-  
-  // Set category itself as the first selected item and make it active
-  selectedAssignItems = [category];
-  activeAssignItem = category;
-
-  // Populate Item select with ONLY related items (excluding category itself)
   const relatedItems = (catObj && catObj.items && Array.isArray(catObj.items)) ? catObj.items : [];
+
+  if (category === 'Chair') {
+    if (unitsInput) {
+      unitsInput.readOnly = false;
+      unitsInput.value = '';
+    }
+  } else {
+    if (unitsInput) {
+      unitsInput.readOnly = true;
+    }
+  }
+
+  if (relatedItems.length > 0) {
+    selectedAssignItems = [...relatedItems];
+    activeAssignItem = relatedItems[0];
+  } else {
+    selectedAssignItems = [category];
+    activeAssignItem = category;
+  }
+
+  // Populate Item select with ONLY related items (excluding already selected items)
+  const availableItems = relatedItems.filter(item => !selectedAssignItems.includes(item));
   itemSelect.innerHTML = '<option value="">Select Item...</option>' +
-    relatedItems.map(item => `<option value="${item}">${item}</option>`).join('');
+    availableItems.map(item => `<option value="${item}">${item}</option>`).join('');
   itemSelect.value = '';
 
   renderAssignItemTags();
@@ -1799,7 +1583,8 @@ function onAssignCategoryChange() {
 
 function updateAssignUnits() {
   const unitsInput = document.getElementById('af-units');
-  if (unitsInput) {
+  const category = document.getElementById('af-cat').value;
+  if (unitsInput && category !== 'Chair') {
     unitsInput.value = selectedAssignItems.length;
   }
 }
