@@ -319,6 +319,14 @@ function navigate(page) {
     }
   }
 
+  // If on a sub-item page, keep the parent nav item highlighted too
+  if (page === 'products' || page === 'available') {
+    const parentNav = document.querySelector('[data-page="categories"]');
+    if (parentNav && !parentNav.classList.contains('active')) {
+      parentNav.classList.add('active');
+    }
+  }
+
   // Clear global search input value and tableState queries when navigating
   tableState.employeeQuery = '';
   tableState.productQuery = '';
@@ -509,7 +517,6 @@ function editEmployee(id) {
   document.getElementById('ef-blood').value = e.blood;
   document.getElementById('ef-status').value = e.status;
   document.getElementById('ef-join').value = e.joinDate;
-  document.getElementById('ef-resign').value = e.resignDate;
   document.getElementById('ef-addr').value = e.address;
   openModal('emp-modal');
 }
@@ -572,7 +579,6 @@ function saveEmployee() {
     blood: document.getElementById('ef-blood').value.trim(),
     status,
     joinDate: document.getElementById('ef-join').value,
-    resignDate: document.getElementById('ef-resign').value,
     address: document.getElementById('ef-addr').value.trim(),
     updatedAt: Date.now()
   };
@@ -659,7 +665,54 @@ function renderCategories(page = tableState.categories) {
   renderPagination('cat', total, page);
 }
 
+function populateCategorySelect() {
+  const select = document.getElementById('cf-name');
+  if (!select) return;
+  const names = db.categories.map(c => typeof c === 'string' ? c : c.name);
+  let html = '<option value="">-- Select or type new --</option><option value="__new__">+ Create New Category</option>';
+  html += names.map(n => `<option value="${n}">${n}</option>`).join('');
+  select.innerHTML = html;
+}
+
+function onCategoryNameChange() {
+  const select = document.getElementById('cf-name');
+  const customInput = document.getElementById('cf-name-custom');
+  if (!select || !customInput) return;
+  if (select.value === '__new__') {
+    customInput.style.display = 'block';
+    customInput.value = '';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    customInput.value = '';
+  }
+}
+
+function getCategoryNameValue() {
+  const select = document.getElementById('cf-name');
+  const customInput = document.getElementById('cf-name-custom');
+  if (select && select.value === '__new__' && customInput) {
+    return customInput.value.trim();
+  }
+  if (select) return select.value.trim();
+  return '';
+}
+
+function addCategory() {
+  populateCategorySelect();
+  editingId.cat = null;
+  document.getElementById('cat-modal-title').textContent = 'Add Category';
+  const select = document.getElementById('cf-name');
+  if (select) select.value = '';
+  const customInput = document.getElementById('cf-name-custom');
+  if (customInput) customInput.style.display = 'none';
+  selectedCategoryTags = [];
+  renderCategoryTags();
+  openModal('cat-modal');
+}
+
 function editCategory(catName) {
+  populateCategorySelect();
   openedCatFromProduct = false;
   editingId.cat = catName;
   document.getElementById('cat-modal-title').textContent = 'Edit Category';
@@ -667,14 +720,17 @@ function editCategory(catName) {
   if (!cat) return;
   const nameVal = typeof cat === 'string' ? cat : cat.name;
   const catItems = typeof cat === 'string' ? [] : (cat.items || []);
-  document.getElementById('cf-name').value = nameVal;
+  const select = document.getElementById('cf-name');
+  if (select) select.value = nameVal;
+  const customInput = document.getElementById('cf-name-custom');
+  if (customInput) customInput.style.display = 'none';
   selectedCategoryTags = [...catItems];
   renderCategoryTags();
   openModal('cat-modal');
 }
 
 function saveCategory() {
-  const name = document.getElementById('cf-name').value.trim();
+  const name = getCategoryNameValue();
   if (!name) { showToast('Category name required.', 'error'); return; }
 
   const catObj = {
@@ -762,11 +818,12 @@ function removeCategoryTag(tag) {
 
 function updateCategorySuggestions() {
   const nameInput = document.getElementById('cf-name');
+  const customInput = document.getElementById('cf-name-custom');
   const wrapper = document.getElementById('cf-suggestions-wrapper');
   const list = document.getElementById('cf-suggestions-list');
   if (!nameInput || !wrapper || !list) return;
 
-  const typedName = nameInput.value.trim().toLowerCase();
+  const typedName = getCategoryNameValue().toLowerCase();
   let suggestions = [];
 
   if (typedName.includes('computer') || typedName.includes('pc')) {
@@ -1117,26 +1174,13 @@ function populateProductTagsSelect() {
 
 function onProductCategoryChange() {
   const cat = document.getElementById('pf-cat').value;
-  const pfQty = document.getElementById('pf-qty');
   const pfCode = document.getElementById('pf-code');
 
-  // Restore defaults
   if (pfCode) {
     pfCode.readOnly = false;
   }
 
-  // Reset qty on every category change
-  if (pfQty) {
-    pfQty.value = '';
-    pfQty.readOnly = false;
-  }
-
   if (cat) {
-    // Auto-fill quantity = 1 by default (user can edit it)
-    if (pfQty && editingId.prod === null) {
-      pfQty.value = 1;
-    }
-
     // Auto-assign code and make readOnly for Chair
     if (cat === 'Chair') {
       if (pfCode && editingId.prod === null) {
@@ -1168,7 +1212,6 @@ function editProduct(id) {
 
   document.getElementById('pf-brand').value = p.brand || '';
   document.getElementById('pf-date').value = p.purchaseDate || '';
-  document.getElementById('pf-qty').value = p.qty || '';
   document.getElementById('pf-status').value = p.status || '';
   openModal('prod-modal');
 }
@@ -1186,7 +1229,6 @@ function openProductModal() {
   document.getElementById('pf-cat').value = '';
   document.getElementById('pf-brand').value = '';
   document.getElementById('pf-date').value = '';
-  document.getElementById('pf-qty').value = '';
   document.getElementById('pf-status').value = '';
 
   openModal('prod-modal');
@@ -1210,7 +1252,7 @@ function saveProduct() {
     brand: document.getElementById('pf-brand').value.trim(),
     serial: '',
     purchaseDate: document.getElementById('pf-date').value,
-    qty: parseInt(document.getElementById('pf-qty').value) || 1,
+    qty: 1,
     status,
     updatedAt: Date.now()
   };
@@ -1776,14 +1818,6 @@ function returnProduct(id) {
   const a = db.assignments.find(x => x.id === id);
   if (!a) return;
   if (!confirm(`Mark "${a.productName}" as returned?`)) return;
-<<<<<<< HEAD
-  const prod = db.products.find(p => p.id === a.productId);
-  if (prod) prod.status = 'Available';
-  db.history.push({ id: db.nextId.history++, productCode: a.productCode, productName: a.productName, action: 'Returned', employee: a.employeeName, date: today(), notes: 'Product returned' });
-  db.assignments = db.assignments.filter(x => x.id !== id);
-  showToast('Product returned to inventory.', 'success');
-  renderAssigned(); updateBadges();
-=======
 
   // Resolve product IDs
   const productIds = a.productIds || (a.productId ? [a.productId] : []);
@@ -1813,7 +1847,6 @@ function returnProduct(id) {
   renderAssigned();
   updateBadges();
   renderDashboard();
->>>>>>> 8e83188df5ddca408b028d68c1dc308207a75d57
 }
 
 function deleteAssignment(id) {
