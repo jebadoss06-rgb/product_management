@@ -179,7 +179,7 @@ function saveDb() {
   localStorage.setItem('pms_db', JSON.stringify(db));
 }
 
-let editingId = { emp: null, cat: null, prod: null };
+let editingId = { emp: null, cat: null, prod: null, assign: null };
 let isRenamingCategory = false;
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6366F1', '#EC4899', '#14B8A6'];
 const PAGE_SIZE = 10;
@@ -197,8 +197,6 @@ let tableState = {
   productCategory: '',
   assigned: 1,
   assignedQuery: '',
-  available: 1,
-  availableQuery: '',
   damaged: 1,
   damagedQuery: '',
   damagedStatus: '',
@@ -348,7 +346,6 @@ function changePage(key, page) {
   else if (key === 'categories' || key === 'cat') renderCategories(page);
   else if (key === 'products' || key === 'prod') renderProducts(page);
   else if (key === 'assign') renderAssigned(page);
-  else if (key === 'available') renderAvailable(page);
   else if (key === 'damaged') renderDamaged(page);
   else if (key === 'repair') renderRepair(page);
   else if (key === 'hist') renderHistory(tableState.historyQuery, page);
@@ -375,7 +372,7 @@ function navigate(page) {
   }
 
   if (submenu) {
-    if (page === 'products' || page === 'available') {
+    if (page === 'products') {
       submenu.classList.add('open');
     } else {
       submenu.classList.remove('open');
@@ -393,11 +390,11 @@ function navigate(page) {
     dashboard: 'Dashboard', 
     employees: 'Employees', 
     'emp-detail': 'Employee Details',
+    'prod-detail': 'Product Details',
     categories: 'Categories', 
     products: 'Products', 
     items: 'Items', 
     assigned: 'Assigned Products', 
-    available: 'Available Products', 
     damaged: 'Damage Reports', 
     repair: 'Repair Tracking', 
     history: 'Product History' 
@@ -419,7 +416,6 @@ function navigate(page) {
   tableState.productQuery = '';
   tableState.categoryQuery = '';
   tableState.assignedQuery = '';
-  tableState.availableQuery = '';
   tableState.damagedQuery = '';
   tableState.damagedStatus = '';
   tableState.repairQuery = '';
@@ -471,7 +467,6 @@ function renderPage(page) {
   if (page === 'products') renderProducts();
   if (page === 'items') renderItems();
   if (page === 'assigned') renderAssigned();
-  if (page === 'available') renderAvailable();
   if (page === 'damaged') renderDamaged();
   if (page === 'repair') renderRepair();
   if (page === 'history') renderHistory();
@@ -1171,25 +1166,75 @@ function renderProducts(page = tableState.products) {
 
 function viewProduct(id) {
   const p = db.products.find(x => x.id === id);
+  if (!p) return;
   const history = db.history.filter(h => h.productCode === p.code);
-  document.getElementById('prod-detail-body').innerHTML = `
-    <div class="detail-section">
-      <h4>Product Information</h4>
-      <div class="detail-grid">
-        <div class="detail-item"><div class="di-label">Product Code</div><div class="di-value">${p.code}</div></div>
-        <div class="detail-item"><div class="di-label">Name</div><div class="di-value">${p.name}</div></div>
-        <div class="detail-item"><div class="di-label">Category</div><div class="di-value">${p.cat}</div></div>
-        <div class="detail-item"><div class="di-label">Purchase Date</div><div class="di-value">${formatDate(p.purchaseDate)}</div></div>
+  const actionColor = { Assigned: 'var(--accent)', Returned: 'var(--success)', Damaged: 'var(--danger)', Repair: 'var(--warning)', Added: 'var(--purple)', Repaired: 'var(--success)' };
+  
+  document.getElementById('prod-detail-page-content').innerHTML = `
+    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start;">
+      
+      <!-- Left side: Product details -->
+      <div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border);padding-bottom:16px;">
+          <div class="avatar" style="width:64px;height:64px;font-size:22px;font-weight:600;background:var(--accent-light);display:flex;align-items:center;justify-content:center;color:var(--accent);border-radius:50%;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size:20px;font-weight:700;color:var(--text);">${p.name}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">${p.cat} · ${p.brand || '—'}</div>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="margin-bottom:12px; font-size:15px; color:var(--text); font-weight:600;">Product Information</h4>
+          <div class="detail-grid" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+            <div class="detail-item"><div class="di-label">Product Code</div><div class="di-value">${p.code}</div></div>
+            <div class="detail-item"><div class="di-label">Category</div><div class="di-value">${p.cat}</div></div>
+            <div class="detail-item"><div class="di-label">Sub-Category</div><div class="di-value">${p.subCat || '—'}</div></div>
+            <div class="detail-item"><div class="di-label">Brand</div><div class="di-value">${p.brand || '—'}</div></div>
+            <div class="detail-item"><div class="di-label">Serial Number</div><div class="di-value"><code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px;">${p.serial || '—'}</code></div></div>
+            <div class="detail-item"><div class="di-label">Purchase Date</div><div class="di-value">${formatDate(p.purchaseDate)}</div></div>
+            <div class="detail-item"><div class="di-label">Quantity</div><div class="di-value">${p.qty}</div></div>
+            <div class="detail-item"><div class="di-label">Status</div><div class="di-value">${statusBadge(p.status)}</div></div>
+          </div>
+        </div>
       </div>
+
+      <!-- Right side: Assignment History -->
+      <div class="card" style="padding: 24px;">
+        <h4 style="margin-bottom:16px; font-size:15px; color:var(--text); font-weight:600; border-bottom:1px solid var(--border); padding-bottom:12px;">Assignment History (${history.length})</h4>
+        ${history.length ? `
+          <div class="table-wrap">
+            <table style="width:100%; border-collapse: collapse;">
+              <thead>
+                <tr>
+                  <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border);">Action</th>
+                  <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border);">Employee</th>
+                  <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border);">Date</th>
+                  <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border);">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${history.map(h => `
+                  <tr>
+                    <td style="padding:10px 12px; font-size:13px; font-weight:600; color:${actionColor[h.action] || 'var(--text-secondary)'}; border-bottom: 1px solid var(--border);">${h.action}</td>
+                    <td style="padding:10px 12px; font-size:13px; border-bottom: 1px solid var(--border);">${h.employee}</td>
+                    <td style="padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom: 1px solid var(--border);">${formatDate(h.date)}</td>
+                    <td style="padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom: 1px solid var(--border); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${h.notes || ''}">${h.notes || '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '<p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">No history records found.</p>'}
+      </div>
+
     </div>
-    <div class="detail-section">
-      <h4>Assignment History (${history.length})</h4>
-      ${history.length ? `<table style="width:100%;font-size:12px;">
-        <thead><tr><th style="text-align:left;padding:6px 8px;background:var(--bg);font-weight:600;color:var(--text-secondary)">Action</th><th style="text-align:left;padding:6px 8px;background:var(--bg);font-weight:600;color:var(--text-secondary)">Employee</th><th style="text-align:left;padding:6px 8px;background:var(--bg);font-weight:600;color:var(--text-secondary)">Date</th><th style="text-align:left;padding:6px 8px;background:var(--bg);font-weight:600;color:var(--text-secondary)">Notes</th></tr></thead>
-        <tbody>${history.map(h => `<tr><td style="padding:7px 8px">${h.action}</td><td style="padding:7px 8px">${h.employee}</td><td style="padding:7px 8px">${formatDate(h.date)}</td><td style="padding:7px 8px;color:var(--text-secondary)">${h.notes}</td></tr>`).join('')}</tbody>
-      </table>` : '<p style="font-size:13px;color:var(--text-secondary)">No history records.</p>'}
-    </div>`;
-  openModal('prod-detail-modal');
+  `;
+  
+  navigate('prod-detail');
 }
 
 let selectedProductTags = [];
@@ -1533,8 +1578,14 @@ function onAssignTypeChange() {
     return;
   }
 
-  // Get available products matching the category
-  let products = db.products.filter(p => p.cat.toLowerCase() === category.toLowerCase() && p.status === 'Available');
+  // Get products of this category that are Available OR belong to the current assignment being edited
+  const currentAssign = editingId.assign ? db.assignments.find(x => x.id === editingId.assign) : null;
+  const currentProdIds = currentAssign ? (currentAssign.productIds || [currentAssign.productId]) : [];
+
+  let products = db.products.filter(p => 
+    p.cat.toLowerCase() === category.toLowerCase() && 
+    (p.status === 'Available' || currentProdIds.includes(p.id))
+  );
 
   // Filter out products that are already selected in the tags list
   const selectedIds = selectedAssignProducts.map(p => p.id);
@@ -1609,7 +1660,8 @@ function updateAssignTotals() {
     selectedProdIdInput.value = selectedAssignProducts.length > 0 ? selectedAssignProducts[0].id : '';
   }
   if (prodCodeDisplay) {
-    prodCodeDisplay.value = selectedAssignProducts.map(p => p.code).join(', ');
+    const uniqueCodesList = [...new Set(selectedAssignProducts.map(p => p.code))];
+    prodCodeDisplay.value = uniqueCodesList.join(', ');
   }
   if (unitsInput) {
     unitsInput.value = selectedAssignProducts.length;
@@ -1691,13 +1743,18 @@ function renderAssigned(page = tableState.assigned) {
       <td>${formatDate(a.assignedDate)}</td>
       <td>${formatAssignmentReturnDate(a.returnDate)}</td>
       <td>
-        ${isReturned
-        ? `<span class="badge badge-available" style="padding:4px 8px; font-size:10px; font-weight:700;">Returned</span>`
-        : `<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="returnProduct(${a.id})">Return</button>`
-      }
-        <button class="btn-icon del" style="margin-left:4px;" onclick="deleteAssignment(${a.id})">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        </button>
+        <div style="display:flex; gap:4px; align-items:center;">
+          ${isReturned
+          ? `<span class="badge badge-available" style="padding:4px 8px; font-size:10px; font-weight:700;">Returned</span>`
+          : `<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="returnProduct(${a.id})">Return</button>
+             <button class="btn-icon edit" title="Edit" onclick="editAssignment(${a.id})">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+             </button>`
+          }
+          <button class="btn-icon del" title="Delete" style="margin-left:4px;" onclick="deleteAssignment(${a.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+          </button>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -1707,6 +1764,11 @@ function renderAssigned(page = tableState.assigned) {
 }
 
 function openAssignModal() {
+  editingId.assign = null;
+  document.getElementById('assign-modal-title').textContent = 'Assign Product';
+  const footerBtn = document.querySelector('#assign-modal .modal-footer .btn-primary');
+  if (footerBtn) footerBtn.textContent = 'Add';
+
   selectedAssignProducts = []; // Clear selected products state
   // Clear autocomplete fields
   document.getElementById('af-emp-search').value = '';
@@ -1730,6 +1792,77 @@ function openAssignModal() {
   openModal('assign-modal');
 }
 
+function editAssignment(id) {
+  const a = db.assignments.find(x => x.id === id);
+  if (!a) return;
+
+  editingId.assign = id;
+  document.getElementById('assign-modal-title').textContent = 'Edit Assignment';
+
+  // Populate Employee
+  const emp = db.employees.find(e => e.id === a.employeeId);
+  if (emp) {
+    document.getElementById('af-emp-search').value = `${emp.name} (${emp.code})`;
+    document.getElementById('af-emp').value = emp.id;
+  }
+
+  // Populate Categories
+  const catSel = document.getElementById('af-cat');
+  catSel.innerHTML = '<option value="">Select Category</option>' + db.categories.map(c => {
+    const name = typeof c === 'string' ? c : c.name;
+    return `<option value="${name}">${name}</option>`;
+  }).join('');
+  
+  const firstProdId = a.productIds ? a.productIds[0] : a.productId;
+  const firstProd = db.products.find(p => p.id === firstProdId);
+  const category = firstProd ? firstProd.cat : '';
+  catSel.value = category;
+
+  // Initialize selected products
+  selectedAssignProducts = [];
+  const productIds = a.productIds || (a.productId ? [a.productId] : []);
+  productIds.forEach(pId => {
+    const prod = db.products.find(p => p.id === pId);
+    if (prod) {
+      selectedAssignProducts.push(prod);
+    }
+  });
+
+  renderAssignProductTags();
+  updateAssignTotals();
+
+  // Populate Type selection group
+  const typeGroup = document.getElementById('af-prod-type-group');
+  const typeSelect = document.getElementById('af-prod-type');
+  const catObj = db.categories.find(c => (typeof c === 'string' ? c : c.name) === category);
+  const items = (catObj && catObj.items && Array.isArray(catObj.items)) ? catObj.items : [];
+
+  if (items.length > 0) {
+    if (typeGroup) typeGroup.style.display = 'block';
+    if (typeSelect) {
+      let typeHtml = '<option value="">All Types</option>';
+      typeHtml += items.map(item => `<option value="${item}">${item}</option>`).join('');
+      typeSelect.innerHTML = typeHtml;
+      typeSelect.value = '';
+    }
+  } else {
+    if (typeGroup) typeGroup.style.display = 'none';
+    if (typeSelect) {
+      typeSelect.innerHTML = '<option value="">All Types</option>';
+      typeSelect.value = '';
+    }
+  }
+
+  onAssignTypeChange();
+
+  document.getElementById('af-date').value = a.assignedDate;
+  
+  const footerBtn = document.querySelector('#assign-modal .modal-footer .btn-primary');
+  if (footerBtn) footerBtn.textContent = 'Save';
+
+  openModal('assign-modal');
+}
+
 function saveAssignment() {
   const empId = parseInt(document.getElementById('af-emp').value);
   if (!empId) { showToast('Please search and select an employee from suggestions.', 'error'); return; }
@@ -1746,44 +1879,112 @@ function saveAssignment() {
 
   const prodIds = selectedAssignProducts.map(p => p.id);
   const prodNames = selectedAssignProducts.map(p => p.name).join(', ');
-  const prodCodes = selectedAssignProducts.map(p => p.code).join(', ');
+  
+  // UNIQUE product codes display (removes duplicates)
+  const uniqueCodesList = [...new Set(selectedAssignProducts.map(p => p.code))];
+  const prodCodes = uniqueCodesList.join(', ');
 
-  // Update statuses & logs for all selected products
-  selectedAssignProducts.forEach(p => {
-    const prod = db.products.find(x => x.id === p.id);
-    if (prod) {
-      prod.status = 'Assigned';
-      prod.updatedAt = Date.now();
-      db.history.push({
-        id: db.nextId.history++,
-        productCode: prod.code,
-        productName: prod.name,
-        action: 'Assigned',
-        employee: emp.name,
-        date: assignedDate,
-        returnDate: returnDate,
-        notes: `Assigned to ${emp.name}`,
-        updatedAt: Date.now()
-      });
-    }
-  });
+  if (editingId.assign) {
+    // EDIT MODE
+    const a = db.assignments.find(x => x.id === editingId.assign);
+    if (!a) { showToast('Assignment record not found.', 'error'); return; }
 
-  const a = {
-    id: db.nextId.assign++,
-    productIds: prodIds,
-    productId: prodIds[0], // fallback compatibility
-    productName: prodNames,
-    productCode: prodCodes,
-    employeeId: empId,
-    employeeName: emp.name,
-    dept: emp.dept,
-    assignedDate: assignedDate,
-    returnDate: returnDate,
-    units: prodIds.length,
-    updatedAt: Date.now()
-  };
+    const oldProductIds = a.productIds || [a.productId];
 
-  db.assignments.push(a);
+    // 1. Identify removed products
+    const removedProductIds = oldProductIds.filter(id => !prodIds.includes(id));
+    removedProductIds.forEach(pId => {
+      const prod = db.products.find(x => x.id === pId);
+      if (prod) {
+        prod.status = 'Available';
+        prod.updatedAt = Date.now();
+        db.history.push({
+          id: db.nextId.history++,
+          productCode: prod.code,
+          productName: prod.name,
+          action: 'Returned',
+          employee: emp.name,
+          date: today(),
+          notes: `Returned/Removed from edited assignment to ${emp.name}`,
+          updatedAt: Date.now()
+        });
+      }
+    });
+
+    // 2. Identify newly added products
+    const addedProductIds = prodIds.filter(id => !oldProductIds.includes(id));
+    addedProductIds.forEach(pId => {
+      const prod = db.products.find(x => x.id === pId);
+      if (prod) {
+        prod.status = 'Assigned';
+        prod.updatedAt = Date.now();
+        db.history.push({
+          id: db.nextId.history++,
+          productCode: prod.code,
+          productName: prod.name,
+          action: 'Assigned',
+          employee: emp.name,
+          date: assignedDate,
+          returnDate: returnDate,
+          notes: `Assigned in edited assignment to ${emp.name}`,
+          updatedAt: Date.now()
+        });
+      }
+    });
+
+    // 3. Update assignment details
+    a.productIds = prodIds;
+    a.productId = prodIds[0];
+    a.productName = prodNames;
+    a.productCode = prodCodes;
+    a.employeeId = empId;
+    a.employeeName = emp.name;
+    a.dept = emp.dept;
+    a.assignedDate = assignedDate;
+    a.units = prodIds.length;
+    a.updatedAt = Date.now();
+
+    showToast('Assignment updated successfully!', 'success');
+  } else {
+    // ADD MODE
+    // Update statuses & logs for all selected products
+    selectedAssignProducts.forEach(p => {
+      const prod = db.products.find(x => x.id === p.id);
+      if (prod) {
+        prod.status = 'Assigned';
+        prod.updatedAt = Date.now();
+        db.history.push({
+          id: db.nextId.history++,
+          productCode: prod.code,
+          productName: prod.name,
+          action: 'Assigned',
+          employee: emp.name,
+          date: assignedDate,
+          returnDate: returnDate,
+          notes: `Assigned to ${emp.name}`,
+          updatedAt: Date.now()
+        });
+      }
+    });
+
+    const a = {
+      id: db.nextId.assign++,
+      productIds: prodIds,
+      productId: prodIds[0],
+      productName: prodNames,
+      productCode: prodCodes,
+      employeeId: empId,
+      employeeName: emp.name,
+      dept: emp.dept,
+      assignedDate: assignedDate,
+      returnDate: returnDate,
+      units: prodIds.length,
+      updatedAt: Date.now()
+    };
+
+    db.assignments.push(a);
+    showToast('Assignment added successfully!', 'success');
+  }
 
   saveDb();
   window.location.reload();
@@ -1844,50 +2045,6 @@ function deleteAssignment(id) {
 
 
 
-// ===================== AVAILABLE =====================
-function renderAvailable(page = tableState.available) {
-  tableState.available = page;
-  const query = (tableState.availableQuery || '').trim().toLowerCase();
-  let avail = db.products.filter(p => p.status === 'Available');
-  if (query) {
-    avail = avail.filter(p => [p.name, p.code, p.brand, p.cat].some(val => (val || '').toLowerCase().includes(query)));
-  }
-  avail.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  const grid = document.getElementById('available-grid');
-  if (!grid) return;
-  const total = avail.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (page > totalPages) page = totalPages;
-  const start = (page - 1) * PAGE_SIZE;
-  const pageItems = avail.slice(start, start + PAGE_SIZE);
-
-  if (!total) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg><p>No available products at this time.</p></div>';
-    updateTableInfo('available-table-info', 0, 0, 0);
-    renderPagination('available', total, page);
-    return;
-  }
-
-  grid.innerHTML = pageItems.map((p, i) =>
-    `<div class="product-card">
-      <div class="pc-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-      </div>
-      <h4>${p.name}</h4>
-      <div class="pc-code">${p.code}</div>
-      <div class="pc-meta">
-        <span><strong>Category:</strong> ${p.cat}</span>
-        <span><strong>Brand:</strong> ${p.brand || '—'}</span>
-        <span><strong>Purchase Date:</strong> ${formatDate(p.purchaseDate)}</span>
-        <span><strong>Qty:</strong> ${p.qty}</span>
-      </div>
-      <div style="margin-top:10px">${statusBadge(p.status)}</div>
-    </div>`
-  ).join('');
-
-  updateTableInfo('available-table-info', start + 1, Math.min(start + pageItems.length, total), total);
-  renderPagination('available', total, page);
-}
 
 // ===================== DAMAGE =====================
 function renderDamaged(page = tableState.damaged) {
@@ -2319,10 +2476,6 @@ function handleGlobalSearch(q) {
       tableState.assignedQuery = query;
       renderAssigned(1);
       break;
-    case 'available':
-      tableState.availableQuery = query;
-      renderAvailable(1);
-      break;
     case 'damaged':
       tableState.damagedQuery = query;
       renderDamaged(1);
@@ -2454,7 +2607,10 @@ function initBaselineTimestamps() {
 initBaselineTimestamps();
 populateCategorySelects();
 const savedPage = sessionStorage.getItem('pms_active_page') || 'dashboard';
-navigate(savedPage === 'emp-detail' ? 'employees' : savedPage);
+let startPage = savedPage;
+if (savedPage === 'emp-detail') startPage = 'employees';
+else if (savedPage === 'prod-detail') startPage = 'products';
+navigate(startPage);
 
 document.addEventListener('click', function (e) {
   // Category Name suggestions close on click outside
