@@ -1,6 +1,4 @@
-- [x] Add X clear button to every search input in index.html
-- [x] Add CSS for clear button positioning
-- [x] Add JS handler functions to clear each search and reset pagination/filter states
-- [ ] Manual test: typing + clicking X on each search box
-
+- [ ] Fix index.html merge-conflict markers (remove all `<<<<<<<`, `=======`, `>>>>>>>` blocks) so page renders.
+- [ ] Verify frontend loads without 404/JS parse errors.
+- [ ] If 404 persists, identify missing resource URL and add/adjust correct file path.
 
