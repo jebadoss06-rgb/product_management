@@ -404,7 +404,14 @@ function renderEmployees(page = tableState.employees) {
 function viewEmployee(id) {
   const e = db.employees.find(x => x.id === id);
   if (!e) return;
-  const prods = db.assignments.filter(a => a.employeeId === id);
+  
+  // Filter active assignments (current products)
+  const currentProds = db.assignments.filter(a => a.employeeId === id && !a.returnDate);
+  
+  // Filter all history events associated with this employee's name
+  const empHistory = db.history
+    .filter(h => h.employee === e.name)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   
   document.getElementById('emp-detail-page-content').innerHTML = `
     <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; align-items: start;">
@@ -434,20 +441,58 @@ function viewEmployee(id) {
         </div>
       </div>
 
-      <!-- Right side: Current Products -->
-      <div class="card" style="padding: 24px;">
-        <h4 style="margin-bottom:16px; font-size:15px; color:var(--text); font-weight:600; border-bottom:1px solid var(--border); padding-bottom:12px;">Current Products (${prods.length})</h4>
-        ${prods.length ? prods.map(a => `
-          <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; font-size:13px; display:flex; flex-direction:column; gap:6px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-weight:700; color:var(--text); font-size:14px;">${a.productName}</span>
-              <code style="background:var(--border); padding:2px 6px; border-radius:4px; font-size:11px;">${a.productCode}</code>
+      <!-- Right side: Current Products and Product History -->
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Current Products -->
+        <div class="card" style="padding: 24px;">
+          <h4 style="margin-bottom:16px; font-size:15px; color:var(--text); font-weight:600; border-bottom:1px solid var(--border); padding-bottom:12px;">Current Products (${currentProds.length})</h4>
+          ${currentProds.length ? currentProds.map(a => `
+            <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:12px; font-size:13px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:var(--text); font-size:14px;">${a.productName}</span>
+                <code style="background:var(--border); padding:2px 6px; border-radius:4px; font-size:11px;">${a.productCode}</code>
+              </div>
+              <div style="color:var(--text-secondary); font-size:12px; margin-top:2px;">
+                Assigned since: <strong>${formatDate(a.assignedDate)}</strong>
+              </div>
             </div>
-            <div style="color:var(--text-secondary); font-size:12px; margin-top:2px;">
-              Assigned since: <strong>${formatDate(a.assignedDate)}</strong>
+          `).join('') : '<p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">No products currently assigned.</p>'}
+        </div>
+
+        <!-- Product History -->
+        <div class="card" style="padding: 24px;">
+          <h4 style="margin-bottom:16px; font-size:15px; color:var(--text); font-weight:600; border-bottom:1px solid var(--border); padding-bottom:12px;">Product History / Usage Log (${empHistory.length})</h4>
+          ${empHistory.length ? `
+            <div class="table-wrap">
+              <table style="width:100%; border-collapse: collapse;">
+                <thead>
+                  <tr>
+                    <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border); text-align:left;">Product</th>
+                    <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border); text-align:left;">Action</th>
+                    <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border); text-align:left;">Date</th>
+                    <th style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); background:var(--bg); padding:10px 12px; font-weight:700; border-bottom: 2px solid var(--border); text-align:left;">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${empHistory.map(h => {
+                    const actColor = { Assigned: 'var(--accent)', Returned: 'var(--success)', Damaged: 'var(--danger)', Repair: 'var(--warning)', Added: 'var(--purple)', Repaired: 'var(--success)', Removed: 'var(--danger)' };
+                    return `
+                      <tr>
+                        <td style="padding:10px 12px; font-size:13px; border-bottom: 1px solid var(--border);">
+                          <div style="font-weight:600; color:var(--text);">${h.productName}</div>
+                          <code style="font-size:11px; color:var(--text-secondary);">${h.productCode}</code>
+                        </td>
+                        <td style="padding:10px 12px; font-size:13px; font-weight:600; color:${actColor[h.action] || 'var(--text-secondary)'}; border-bottom: 1px solid var(--border);">${h.action}</td>
+                        <td style="padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom: 1px solid var(--border);">${formatDate(h.date)}</td>
+                        <td style="padding:10px 12px; font-size:13px; color:var(--text-secondary); border-bottom: 1px solid var(--border); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${h.notes || ''}">${h.notes || '—'}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
             </div>
-          </div>
-        `).join('') : '<p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">No products currently assigned.</p>'}
+          ` : '<p style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px 0;">No history records found.</p>'}
+        </div>
       </div>
 
     </div>
