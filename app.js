@@ -9,174 +9,19 @@ let db = {
   history: [],
 };
 
-const savedDb = localStorage.getItem('pms_db');
-if (savedDb) {
-  try {
-    db = JSON.parse(savedDb);
-  } catch (e) {
-    console.error('Error loading saved database', e);
+// Load is handled at the bottom of the file inside initApp()
+const originalFetch = window.fetch;
+window.fetch = function (input, init) {
+  if (typeof input === 'string' && input.startsWith('/api/')) {
+    const apiBase = window.location.port === '3000' ? '' : 'http://localhost:3000';
+    input = apiBase + input;
   }
-}
-
-// Force seed dummy data ONCE using a persistent flag in localStorage for testing
-if (!localStorage.getItem('pms_data_seeded_v3')) {
-  db = {
-    categories: [
-      { name: "Computer", items: ["Mouse", "CPU", "Keyboard", "Monitor"], updatedAt: Date.now() - 5000 },
-      { name: "Accessories", items: ["Webcam", "Headset", "USB Hub", "Speaker"], updatedAt: Date.now() - 4000 },
-      { name: "Furniture", items: ["Chair", "Desk"], updatedAt: Date.now() - 3000 }
-    ],
-    employees: [
-      {
-        id: 1,
-        code: "EMP001",
-        name: "Jeba Doss",
-        dept: "Engineering",
-        role: "Developer",
-        email: "jeba.doss@example.com",
-        phone: "9876543210",
-        blood: "O+",
-        status: "Active",
-        joinDate: "2025-01-15",
-        resignDate: "",
-        address: "Chennai, Tamil Nadu",
-        updatedAt: Date.now() - 5000
-      },
-      {
-        id: 2,
-        code: "EMP002",
-        name: "Ravi Kumar",
-        dept: "Design",
-        role: "UI Designer",
-        email: "ravi.kumar@example.com",
-        phone: "9876543211",
-        blood: "A+",
-        status: "Active",
-        joinDate: "2025-03-10",
-        resignDate: "",
-        address: "Coimbatore, Tamil Nadu",
-        updatedAt: Date.now() - 4000
-      }
-    ],
-    products: [
-      {
-        id: 1,
-        code: "PRD001",
-        name: "Logitech G502 Mouse",
-        cat: "Computer",
-        subCat: "Mouse",
-        brand: "Logitech",
-        serial: "S/N 12345",
-        purchaseDate: "2025-02-01",
-        qty: 1,
-        status: "Available",
-        updatedAt: Date.now() - 5000
-      },
-      {
-        id: 2,
-        code: "PRD002",
-        name: "Intel Core i9 CPU Tower",
-        cat: "Computer",
-        subCat: "CPU",
-        brand: "Intel",
-        serial: "S/N 54321",
-        purchaseDate: "2025-02-01",
-        qty: 1,
-        status: "Available",
-        updatedAt: Date.now() - 4500
-      },
-      {
-        id: 3,
-        code: "PRD003",
-        name: "Keychron K2 Keyboard",
-        cat: "Computer",
-        subCat: "Keyboard",
-        brand: "Keychron",
-        serial: "S/N 98765",
-        purchaseDate: "2025-02-01",
-        qty: 1,
-        status: "Available",
-        updatedAt: Date.now() - 4000
-      },
-      {
-        id: 4,
-        code: "PRD004",
-        name: "Dell UltraSharp 27 Monitor",
-        cat: "Computer",
-        subCat: "Monitor",
-        brand: "Dell",
-        serial: "S/N 56789",
-        purchaseDate: "2025-02-01",
-        qty: 1,
-        status: "Available",
-        updatedAt: Date.now() - 3500
-      },
-      {
-        id: 5,
-        code: "PRD005",
-        name: "Logitech C922 Webcam",
-        cat: "Accessories",
-        subCat: "Webcam",
-        brand: "Logitech",
-        serial: "S/N 87654",
-        purchaseDate: "2025-03-01",
-        qty: 1,
-        status: "Available",
-        updatedAt: Date.now() - 3000
-      }
-    ],
-    assignments: [],
-    damages: [],
-    repairs: [],
-    history: [
-      { id: 1, productCode: "PRD001", productName: "Logitech G502 Mouse", action: "Added", employee: "—", date: "2025-02-01", notes: "Product added to inventory", updatedAt: Date.now() - 5000 },
-      { id: 2, productCode: "PRD002", productName: "Intel Core i9 CPU Tower", action: "Added", employee: "—", date: "2025-02-01", notes: "Product added to inventory", updatedAt: Date.now() - 4500 },
-      { id: 3, productCode: "PRD003", productName: "Keychron K2 Keyboard", action: "Added", employee: "—", date: "2025-02-01", notes: "Product added to inventory", updatedAt: Date.now() - 4000 },
-      { id: 4, productCode: "PRD004", productName: "Dell UltraSharp 27 Monitor", action: "Added", employee: "—", date: "2025-02-01", notes: "Product added to inventory", updatedAt: Date.now() - 3500 },
-      { id: 5, productCode: "PRD005", productName: "Logitech C922 Webcam", action: "Added", employee: "—", date: "2025-03-01", notes: "Product added to inventory", updatedAt: Date.now() - 3000 }
-    ],
-    nextId: {
-      emp: 3,
-      prod: 6,
-      assign: 1,
-      dmg: 1,
-      repair: 1,
-      history: 6
-    }
-  };
-  localStorage.setItem('pms_db', JSON.stringify(db));
-  localStorage.setItem('pms_data_seeded_v3', 'true');
-}
-
-// Sanitize database structure to ensure all arrays are defined
-db.employees = db.employees || [];
-db.categories = db.categories || [];
-db.products = db.products || [];
-db.assignments = db.assignments || [];
-db.damages = db.damages || [];
-db.repairs = db.repairs || [];
-db.history = db.history || [];
-
-// Initialize nextId if not present or corrupt (e.g. contains NaN)
-if (!db.nextId || 
-    isNaN(db.nextId.emp) || 
-    isNaN(db.nextId.prod) || 
-    isNaN(db.nextId.assign) || 
-    isNaN(db.nextId.dmg) || 
-    isNaN(db.nextId.repair) || 
-    isNaN(db.nextId.history)) {
-  db.nextId = {
-    emp: db.employees.length ? Math.max(...db.employees.map(e => parseInt(e.id) || 0), 0) + 1 : 1,
-    prod: db.products.length ? Math.max(...db.products.map(p => parseInt(p.id) || 0), 0) + 1 : 1,
-    assign: db.assignments.length ? Math.max(...db.assignments.map(a => parseInt(a.id) || 0), 0) + 1 : 1,
-    dmg: db.damages.length ? Math.max(...db.damages.map(d => parseInt(d.id) || 0), 0) + 1 : 1,
-    repair: db.repairs.length ? Math.max(...db.repairs.map(r => parseInt(r.id) || 0), 0) + 1 : 1,
-    history: db.history.length ? Math.max(...db.history.map(h => parseInt(h.id) || 0), 0) + 1 : 1
-  };
-}
+  return originalFetch(input, init);
+};
 
 function saveDb() {
-  localStorage.setItem('pms_db', JSON.stringify(db));
+  // saveDb is now handled per-action via async API fetch calls.
+  // This empty function is kept to prevent any errors from other sections calling saveDb().
 }
 
 let editingId = { emp: null, cat: null, prod: null };
@@ -715,7 +560,7 @@ function saveEmployee() {
   }
 
   const emp = {
-    id: editingId.emp || db.nextId.emp++,
+    id: editingId.emp || db.nextId.emp,
     code, name, dept, role, email,
     phone,
     blood: document.getElementById('ef-blood').value.trim(),
@@ -725,25 +570,37 @@ function saveEmployee() {
     address: document.getElementById('ef-addr').value.trim(),
     updatedAt: Date.now()
   };
-  if (editingId.emp) {
-    const i = db.employees.findIndex(x => x.id === editingId.emp);
-    db.employees[i] = emp;
-    showToast('Employee updated.', 'success');
-  } else {
-    db.employees.push(emp);
-    showToast('Employee added.', 'success');
-  }
-  
-  saveDb();
-  window.location.reload();
+
+  fetch('/api/employees', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(emp)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to save employee');
+    showToast(editingId.emp ? 'Employee updated.' : 'Employee added.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error saving employee.', 'error');
+  });
 }
 
 function deleteEmployee(id) {
   if (!confirm('Delete this employee?')) return;
-  db.employees = db.employees.filter(x => x.id !== id);
-  showToast('Employee deleted.', 'success');
-  saveDb();
-  window.location.reload();
+  fetch(`/api/employees/${id}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to delete employee');
+    showToast('Employee deleted.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error deleting employee.', 'error');
+  });
 }
 
 // ===================== CATEGORIES =====================
@@ -825,37 +682,54 @@ function saveCategory() {
   const name = document.getElementById('cf-name').value.trim();
   if (!name) { showToast('Category name required.', 'error'); return; }
 
+  const categoryObj = {
+    name,
+    items: [],
+    updatedAt: Date.now()
+  };
+
   if (editingId.cat !== null) {
-    // Update existing
-    const idx = db.categories.findIndex(c => (typeof c === 'string' ? c : c.name) === editingId.cat);
-    if (idx !== -1) {
-      const existing = db.categories[idx];
-      db.categories[idx] = {
-        name,
-        items: (typeof existing === 'object' && existing.items) ? existing.items : [],
-        ...(existing.subCategories ? { subCategories: existing.subCategories } : {}),
-        updatedAt: Date.now()
-      };
+    const existing = db.categories.find(c => (typeof c === 'string' ? c : c.name) === editingId.cat);
+    if (existing) {
+      categoryObj.items = (typeof existing === 'object' && existing.items) ? existing.items : [];
     }
-    showToast('Category updated.', 'success');
+    categoryObj.oldName = editingId.cat; // Pass the old name for renaming on backend
   } else {
     // Check for duplicate
     const exists = db.categories.some(c => (typeof c === 'string' ? c : c.name).toLowerCase() === name.toLowerCase());
     if (exists) { showToast('Category already exists.', 'error'); return; }
-    db.categories.push({ name, items: [], updatedAt: Date.now() });
-    showToast('Category added.', 'success');
   }
 
-  saveDb();
-  window.location.reload();
+  fetch('/api/categories', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(categoryObj)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to save category');
+    showToast(editingId.cat !== null ? 'Category updated.' : 'Category added.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error saving category.', 'error');
+  });
 }
 
 function deleteCategory(catName) {
   if (!confirm('Delete this category?')) return;
-  db.categories = db.categories.filter(c => (typeof c === 'string' ? c : c.name) !== catName);
-  showToast('Category deleted.', 'success');
-  saveDb();
-  window.location.reload();
+  fetch(`/api/categories/${encodeURIComponent(catName)}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to delete category');
+    showToast('Category deleted.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error deleting category.', 'error');
+  });
 }
 
 // Stub functions kept to avoid any lingering references from old code
@@ -1373,7 +1247,7 @@ function saveProduct() {
   const pfStatus = document.getElementById('pf-status');
 
   const prod = {
-    id: editingId.prod || db.nextId.prod++,
+    id: editingId.prod || db.nextId.prod,
     code,
     name,
     cat,
@@ -1385,26 +1259,58 @@ function saveProduct() {
     status: pfStatus ? (pfStatus.value || 'Available') : (existing ? (existing.status || 'Available') : 'Available'),
     updatedAt: Date.now()
   };
-  if (editingId.prod) {
-    const i = db.products.findIndex(x => x.id === editingId.prod);
-    db.products[i] = prod;
-    showToast('Product updated.', 'success');
-  } else {
-    db.products.push(prod);
-    db.history.push({ id: db.nextId.history++, productCode: prod.code, productName: prod.name, action: 'Added', employee: '—', date: today(), notes: 'Product added to inventory', updatedAt: Date.now() });
-    showToast('Product added.', 'success');
+
+  const promises = [];
+  promises.push(fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prod)
+  }));
+
+  if (!editingId.prod) {
+    // If it's a new product, also create history entry
+    const hist = {
+      id: db.nextId.history,
+      productCode: prod.code,
+      productName: prod.name,
+      action: 'Added',
+      employee: '—',
+      date: today(),
+      notes: 'Product added to inventory',
+      updatedAt: Date.now()
+    };
+    promises.push(fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(hist)
+    }));
   }
-  
-  saveDb();
-  window.location.reload();
+
+  Promise.all(promises)
+  .then(() => {
+    showToast(editingId.prod ? 'Product updated.' : 'Product added.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error saving product.', 'error');
+  });
 }
 
 function deleteProduct(id) {
   if (!confirm('Delete this product?')) return;
-  db.products = db.products.filter(x => x.id !== id);
-  showToast('Product deleted.', 'success');
-  saveDb();
-  window.location.reload();
+  fetch(`/api/products/${id}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to delete product');
+    showToast('Product deleted.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error deleting product.', 'error');
+  });
 }
 
 let selectedAssignProducts = [];
@@ -1749,27 +1655,9 @@ function saveAssignment() {
   const prodCodes = selectedAssignProducts.map(p => p.code).join(', ');
 
   // Update statuses & logs for all selected products
-  selectedAssignProducts.forEach(p => {
-    const prod = db.products.find(x => x.id === p.id);
-    if (prod) {
-      prod.status = 'Assigned';
-      prod.updatedAt = Date.now();
-      db.history.push({
-        id: db.nextId.history++,
-        productCode: prod.code,
-        productName: prod.name,
-        action: 'Assigned',
-        employee: emp.name,
-        date: assignedDate,
-        returnDate: returnDate,
-        notes: `Assigned to ${emp.name}`,
-        updatedAt: Date.now()
-      });
-    }
-  });
-
+  const promises = [];
   const a = {
-    id: db.nextId.assign++,
+    id: db.nextId.assign,
     productIds: prodIds,
     productId: prodIds[0], // fallback compatibility
     productName: prodNames,
@@ -1783,10 +1671,50 @@ function saveAssignment() {
     updatedAt: Date.now()
   };
 
-  db.assignments.push(a);
+  promises.push(fetch('/api/assignments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(a)
+  }));
 
-  saveDb();
-  window.location.reload();
+  let histId = db.nextId.history;
+  selectedAssignProducts.forEach(p => {
+    const prod = db.products.find(x => x.id === p.id);
+    if (prod) {
+      const updatedProd = { ...prod, status: 'Assigned', updatedAt: Date.now() };
+      promises.push(fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProd)
+      }));
+
+      const hist = {
+        id: histId++,
+        productCode: prod.code,
+        productName: prod.name,
+        action: 'Assigned',
+        employee: emp.name,
+        date: assignedDate,
+        returnDate: returnDate,
+        notes: `Assigned to ${emp.name}`,
+        updatedAt: Date.now()
+      };
+      promises.push(fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(hist)
+      }));
+    }
+  });
+
+  Promise.all(promises)
+  .then(() => {
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error saving assignment.', 'error');
+  });
 }
 
 function returnProduct(id) {
@@ -1794,15 +1722,22 @@ function returnProduct(id) {
   if (!a) return;
   if (!confirm(`Mark "${a.productName}" as returned?`)) return;
 
-  // Resolve product IDs
+  const promises = [];
   const productIds = a.productIds || (a.productId ? [a.productId] : []);
+  let histId = db.nextId.history;
+
   productIds.forEach(pId => {
     const prod = db.products.find(p => p.id === pId);
     if (prod) {
-      prod.status = 'Available';
-      prod.updatedAt = Date.now();
-      db.history.push({
-        id: db.nextId.history++,
+      const updatedProd = { ...prod, status: 'Available', updatedAt: Date.now() };
+      promises.push(fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedProd)
+      }));
+
+      const hist = {
+        id: histId++,
         productCode: prod.code,
         productName: prod.name,
         action: 'Returned',
@@ -1810,36 +1745,70 @@ function returnProduct(id) {
         date: today(),
         notes: 'Product returned from bundle',
         updatedAt: Date.now()
-      });
+      };
+      promises.push(fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(hist)
+      }));
     }
   });
 
-  // Update assignment returnDate to current date & time
-  a.returnDate = currentDateTime();
-  a.updatedAt = Date.now();
+  const updatedAssignment = {
+    ...a,
+    returnDate: currentDateTime(),
+    updatedAt: Date.now()
+  };
+  promises.push(fetch('/api/assignments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedAssignment)
+  }));
 
-  saveDb();
-  window.location.reload();
+  Promise.all(promises)
+  .then(() => {
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error returning product.', 'error');
+  });
 }
 
 function deleteAssignment(id) {
   if (!confirm('Remove this assignment record?')) return;
 
   const a = db.assignments.find(x => x.id === id);
+  const promises = [];
+
   if (a && !a.returnDate) {
     const productIds = a.productIds || (a.productId ? [a.productId] : []);
     productIds.forEach(pId => {
       const prod = db.products.find(p => p.id === pId);
       if (prod) {
-        prod.status = 'Available';
+        const updatedProd = { ...prod, status: 'Available', updatedAt: Date.now() };
+        promises.push(fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedProd)
+        }));
       }
     });
   }
 
-  db.assignments = db.assignments.filter(x => x.id !== id);
-  showToast('Assignment removed.', 'success');
-  saveDb();
-  window.location.reload();
+  promises.push(fetch(`/api/assignments/${id}`, {
+    method: 'DELETE'
+  }));
+
+  Promise.all(promises)
+  .then(() => {
+    showToast('Assignment removed.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error removing assignment.', 'error');
+  });
 }
 
 
@@ -1952,7 +1921,7 @@ function saveDamage() {
   if (!prod) { showToast('Selected product not found.', 'error'); return; }
 
   const d = {
-    id: db.nextId.dmg++,
+    id: db.nextId.dmg,
     productId: prodId, productCode: prod.code, productName: prod.name,
     status,
     date: document.getElementById('df-date').value || today(),
@@ -1960,20 +1929,65 @@ function saveDamage() {
     notes: document.getElementById('df-notes').value.trim(),
     updatedAt: Date.now()
   };
-  db.damages.push(d);
-  prod.status = status === 'Damaged' ? 'Damaged' : 'Replaced';
-  prod.updatedAt = Date.now();
-  db.history.push({ id: db.nextId.history++, productCode: prod.code, productName: prod.name, action: status === 'Damaged' ? 'Damaged' : 'Replaced', employee: '—', date: d.date, notes: d.notes, updatedAt: Date.now() });
-  saveDb();
-  window.location.reload();
+
+  const promises = [];
+  promises.push(fetch('/api/damages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d)
+  }));
+
+  const updatedProd = {
+    ...prod,
+    status: status === 'Damaged' ? 'Damaged' : 'Replaced',
+    updatedAt: Date.now()
+  };
+  promises.push(fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedProd)
+  }));
+
+  const hist = {
+    id: db.nextId.history,
+    productCode: prod.code,
+    productName: prod.name,
+    action: status === 'Damaged' ? 'Damaged' : 'Replaced',
+    employee: '—',
+    date: d.date,
+    notes: d.notes,
+    updatedAt: Date.now()
+  };
+  promises.push(fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hist)
+  }));
+
+  Promise.all(promises)
+  .then(() => {
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error reporting damage.', 'error');
+  });
 }
 
 function deleteDamage(id) {
   if (!confirm('Delete this damage report?')) return;
-  db.damages = db.damages.filter(x => x.id !== id);
-  showToast('Report deleted.', 'success');
-  saveDb();
-  window.location.reload();
+  fetch(`/api/damages/${id}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to delete report');
+    showToast('Report deleted.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error deleting report.', 'error');
+  });
 }
 
 function openDmgModal(defaultAction = '') {
@@ -2126,7 +2140,7 @@ function saveRepair() {
   if (!prod) { showToast('Selected product not found.', 'error'); return; }
 
   const r = {
-    id: db.nextId.repair++,
+    id: db.nextId.repair,
     productId: prodId, productCode: prod.code, productName: prod.name,
     center,
     contact,
@@ -2137,35 +2151,114 @@ function saveRepair() {
     notes: document.getElementById('rf-notes').value.trim(),
     updatedAt: Date.now()
   };
-  db.repairs.push(r);
-  prod.status = 'Repair';
-  prod.updatedAt = Date.now();
-  db.history.push({ id: db.nextId.history++, productCode: prod.code, productName: prod.name, action: 'Repair', employee: '—', date: r.dateSent, notes: `Sent to ${r.center}`, updatedAt: Date.now() });
-  saveDb();
-  window.location.reload();
+
+  const promises = [];
+  promises.push(fetch('/api/repairs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(r)
+  }));
+
+  const updatedProd = { ...prod, status: 'Repair', updatedAt: Date.now() };
+  promises.push(fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedProd)
+  }));
+
+  const hist = {
+    id: db.nextId.history,
+    productCode: prod.code,
+    productName: prod.name,
+    action: 'Repair',
+    employee: '—',
+    date: r.dateSent,
+    notes: `Sent to ${r.center}`,
+    updatedAt: Date.now()
+  };
+  promises.push(fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hist)
+  }));
+
+  Promise.all(promises)
+  .then(() => {
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error saving repair record.', 'error');
+  });
 }
 
 function deleteRepair(id) {
   if (!confirm('Delete this repair record?')) return;
-  db.repairs = db.repairs.filter(x => x.id !== id);
-  showToast('Record deleted.', 'success');
-  saveDb();
-  window.location.reload();
+  fetch(`/api/repairs/${id}`, {
+    method: 'DELETE'
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Failed to delete record');
+    showToast('Record deleted.', 'success');
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error deleting record.', 'error');
+  });
 }
 
 function completeRepair(id) {
   const r = db.repairs.find(x => x.id === id);
   if (!r) return;
-  r.status = 'Completed';
-  r.updatedAt = Date.now();
+  
+  const updatedRepair = {
+    ...r,
+    status: 'Completed',
+    updatedAt: Date.now()
+  };
+
+  const promises = [];
+  promises.push(fetch('/api/repairs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedRepair)
+  }));
+
   const prod = db.products.find(p => p.id === r.productId);
   if (prod) {
-    prod.status = 'Available';
-    prod.updatedAt = Date.now();
+    const updatedProd = { ...prod, status: 'Available', updatedAt: Date.now() };
+    promises.push(fetch('/api/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedProd)
+    }));
   }
-  db.history.push({ id: db.nextId.history++, productCode: r.productCode, productName: r.productName, action: 'Repaired', employee: '—', date: today(), notes: 'Repair completed, returned to inventory', updatedAt: Date.now() });
-  saveDb();
-  window.location.reload();
+
+  const hist = {
+    id: db.nextId.history,
+    productCode: r.productCode,
+    productName: r.productName,
+    action: 'Repaired',
+    employee: '—',
+    date: today(),
+    notes: 'Repair completed, returned to inventory',
+    updatedAt: Date.now()
+  };
+  promises.push(fetch('/api/history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(hist)
+  }));
+
+  Promise.all(promises)
+  .then(() => {
+    window.location.reload();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Error completing repair.', 'error');
+  });
 }
 
 function openRepairModal() {
@@ -2439,22 +2532,32 @@ function exportPDF() {
 }
 
 // ===================== INIT =====================
-function initBaselineTimestamps() {
-  const collections = ['employees', 'categories', 'products', 'assignments', 'damages', 'repairs', 'history'];
-  collections.forEach(col => {
-    if (db[col] && Array.isArray(db[col])) {
-      db[col].forEach((item, index) => {
-        if (item && typeof item === 'object') {
-          item.updatedAt = item.updatedAt || (Date.now() - (db[col].length - index) * 60000);
-        }
-      });
-    }
-  });
+async function initApp() {
+  try {
+    const res = await fetch('/api/db');
+    if (!res.ok) throw new Error('Failed to load database from backend');
+    const data = await res.json();
+    db = data;
+  } catch (e) {
+    console.error('Error loading data from backend', e);
+  }
+
+  // Sanitize structure
+  db.employees = db.employees || [];
+  db.categories = db.categories || [];
+  db.products = db.products || [];
+  db.assignments = db.assignments || [];
+  db.damages = db.damages || [];
+  db.repairs = db.repairs || [];
+  db.history = db.history || [];
+  db.nextId = db.nextId || { emp: 1, prod: 1, assign: 1, dmg: 1, repair: 1, history: 1 };
+
+  populateCategorySelects();
+  const savedPage = sessionStorage.getItem('pms_active_page') || 'dashboard';
+  navigate(savedPage === 'emp-detail' ? 'employees' : savedPage);
 }
-initBaselineTimestamps();
-populateCategorySelects();
-const savedPage = sessionStorage.getItem('pms_active_page') || 'dashboard';
-navigate(savedPage === 'emp-detail' ? 'employees' : savedPage);
+
+initApp();
 
 document.addEventListener('click', function (e) {
   // Category Name suggestions close on click outside
