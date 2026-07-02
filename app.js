@@ -64,8 +64,8 @@ function getFilteredEmployees() {
 
 function getFilteredProducts() {
   return db.products.filter(p => {
-    // Exclude damaged products from the main product table
-    if (p.status === 'Damaged') return false;
+    // Exclude damaged/replaced products and products with damage reports from the main product table
+    if (p.status === 'Damaged' || p.status === 'Replaced' || db.damages.some(d => d.productId === p.id)) return false;
 
     const query = tableState.productQuery;
     const matchesQuery = !query || [p.code, p.name, p.cat, p.brand, p.subCat]
@@ -1673,7 +1673,8 @@ function openAssignModal() {
   const footerBtn = document.querySelector('#assign-modal .modal-footer .btn-primary');
   if (footerBtn) footerBtn.textContent = 'Add';
 
-  selectedAssignProducts = []; // Clear selected products state
+  clearAssignProduct();
+
   // Clear autocomplete fields
   document.getElementById('af-emp-search').value = '';
   document.getElementById('af-emp').value = '';
@@ -1689,6 +1690,7 @@ function openAssignModal() {
     const name = typeof c === 'string' ? c : c.name;
     return `<option value="${name}">${name}</option>`;
   }).join('');
+  catSel.value = '';
 
   onAssignCategoryChange();
 
